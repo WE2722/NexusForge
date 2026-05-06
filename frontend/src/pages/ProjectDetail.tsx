@@ -4,6 +4,7 @@ import { Layers, PlayCircle, PauseCircle } from 'lucide-react'
 import { useProjects } from '../hooks/useProject'
 import TaskTimeline from '../components/TaskTimeline'
 import CodeViewer from '../components/CodeViewer'
+import ProjectExport from '../components/ProjectExport'
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
@@ -51,6 +52,9 @@ export default function ProjectDetail() {
              <button className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md flex items-center gap-2 transition-colors text-sm">
              <PlayCircle size={16} /> Resume
            </button>
+          )}
+          {activeProject.status === 'completed' && (
+             <ProjectExport project={activeProject} />
           )}
         </div>
       </div>

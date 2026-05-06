@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import io
+import zipfile
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -46,6 +48,90 @@ async def get_project(project_id: str):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.get("/projects/{project_id}/export")
+async def export_project(project_id: str):
+    """Export project files as a ZIP archive with executable launch scripts."""
+    project = await orchestrator.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+        files_added = 0
+        for task in project.tasks:
+            if task.result and task.result.code_blocks:
+                for file_path, content in task.result.code_blocks.items():
+                    safe_path = file_path.strip()
+                    if not safe_path:
+                        safe_path = f"unnamed_{task.id[:8]}_{files_added}.txt"
+                    zip_file.writestr(safe_path, content)
+                    files_added += 1
+        
+        # Inject executable run scripts
+        bat_script = """@echo off
+echo Starting NexusForge Generated App...
+echo.
+
+IF EXIST "backend" (
+    echo [Backend] Installing requirements...
+    cd backend
+    pip install -r requirements.txt
+    echo [Backend] Starting server...
+    start cmd /k "uvicorn app.main:app --reload --port 8000"
+    cd ..
+)
+
+IF EXIST "frontend" (
+    echo [Frontend] Installing dependencies...
+    cd frontend
+    call npm install
+    echo [Frontend] Starting server...
+    start cmd /k "npm run dev"
+    cd ..
+)
+
+echo Done! The app is launching in new windows.
+pause
+"""
+        sh_script = """#!/bin/bash
+echo "Starting NexusForge Generated App..."
+
+if [ -d "backend" ]; then
+    echo "[Backend] Installing requirements..."
+    cd backend
+    pip3 install -r requirements.txt
+    echo "[Backend] Starting server on port 8000..."
+    uvicorn app.main:app --reload --port 8000 &
+    cd ..
+fi
+
+if [ -d "frontend" ]; then
+    echo "[Frontend] Installing dependencies..."
+    cd frontend
+    npm install
+    echo "[Frontend] Starting server..."
+    npm run dev &
+    cd ..
+fi
+
+echo "Done! The app is launching in the background."
+wait
+"""
+        if files_added > 0:
+            zip_file.writestr("run_app.bat", bat_script)
+            zip_file.writestr("run_app.sh", sh_script)
+
+    if files_added == 0:
+        raise HTTPException(status_code=400, detail="No generated files found to export.")
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/x-zip-compressed",
+        headers={"Content-Disposition": f'attachment; filename="{project.brief.title.replace(" ", "_") if project.brief else "project"}.zip"'}
+    )
 
 
 @router.get("/projects/{project_id}/stream")
