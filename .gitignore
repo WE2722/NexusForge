@@ -1,0 +1,28 @@
+# Environment
+.env
+.env.local
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Frontend
+node_modules/
+dist/
+build/
+*.log
+coverage/
+
+# IDE
+.antigravity/
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.sqlite
+*.db
