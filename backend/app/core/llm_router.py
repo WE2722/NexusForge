@@ -26,7 +26,7 @@ FALLBACK_CHAIN: list[LLMProvider] = [
 
 PROVIDER_MODELS: dict[LLMProvider, str] = {
     LLMProvider.GOOGLE: "gemini-2.0-flash",
-    LLMProvider.GROQ: "llama-3.3-70b-versatile",
+    LLMProvider.GROQ: "llama-3.1-8b-instant",
     LLMProvider.MISTRAL: "mistral-small-latest",
     LLMProvider.OPENROUTER: "google/gemini-2.0-flash-exp:free",
 }

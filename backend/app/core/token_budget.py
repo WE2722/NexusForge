@@ -27,7 +27,7 @@ class ProviderQuota:
 DEFAULT_QUOTAS: dict[LLMProvider, ProviderQuota] = {
     LLMProvider.GOOGLE: ProviderQuota(tokens_per_minute=250_000, requests_per_minute=15),
     LLMProvider.GROQ: ProviderQuota(requests_per_day=1_000),
-    LLMProvider.MISTRAL: ProviderQuota(requests_per_minute=2, tokens_per_month=1_000_000_000),
+    LLMProvider.MISTRAL: ProviderQuota(requests_per_minute=60, tokens_per_month=1_000_000_000),
     LLMProvider.OPENROUTER: ProviderQuota(tokens_per_minute=100_000, requests_per_minute=60),
 }
 

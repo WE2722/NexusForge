@@ -111,3 +111,52 @@ class BaseAgent(ABC):
             "expertise": self.expertise,
             "preferred_providers": [p.value for p in self.preferred_providers],
         }
+
+    def _extract_code_blocks(self, content: str) -> dict[str, str]:
+        import re
+        blocks: dict[str, str] = {}
+        lines = content.split("\n")
+        i, block_name, block_lines = 0, "", []
+        in_block = False
+        while i < len(lines):
+            line = lines[i]
+            if line.startswith("```") and not in_block:
+                in_block = True
+                lang_parts = line[3:].strip().split()
+                lang = lang_parts[0] if lang_parts else "txt"
+                
+                # Extract filename from markdown
+                found_name = ""
+                # 1. If filename is in the ``` tag (e.g., ```python src/main.py)
+                if len(lang_parts) > 1:
+                    found_name = lang_parts[1].split("/")[-1]
+                else:
+                    # 2. Look backwards up to 5 lines for a filename hint
+                    prev_idx = i - 1
+                    while prev_idx >= 0 and i - prev_idx <= 5:
+                        p_line = lines[prev_idx].strip()
+                        if p_line:
+                            # Search for typical extensions
+                            m = re.search(r"([a-zA-Z0-9_\-\.]+\.[a-zA-Z0-9]+)", p_line)
+                            if m:
+                                found_name = m.group(1).split("/")[-1]
+                                break
+                            # Or if it's bold/header
+                            if p_line.startswith("#") or p_line.startswith("**"):
+                                found_name = p_line.strip("#* :`").split("/")[-1]
+                                break
+                        prev_idx -= 1
+                        
+                block_name = found_name if found_name else f"block_{len(blocks)}.{lang}"
+                block_lines = []
+            elif line.startswith("```") and in_block:
+                in_block = False
+                blocks[block_name] = "\n".join(block_lines)
+            elif in_block:
+                block_lines.append(line)
+            i += 1
+            
+        if in_block and block_lines:
+            blocks[block_name] = "\n".join(block_lines)
+            
+        return blocks

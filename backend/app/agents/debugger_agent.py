@@ -23,7 +23,7 @@ class DebuggerAgent(BaseAgent):
     async def execute(self, task: Task) -> AgentResult:
         start = time.perf_counter()
         prompt = f"Task: {task.title}\n\nDescription: {task.description}\n\nDiagnose and fix the issue."
-        response = await self._call_llm(prompt, system_prompt=SYSTEM_PROMPT, max_tokens=8192)
+        response = await self._call_llm(prompt, system_prompt=SYSTEM_PROMPT, max_tokens=4096)
         elapsed = (time.perf_counter() - start) * 1000
         if not response.success:
             return self._build_result(task, False, "", errors=[response.error], execution_time_ms=elapsed)

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import io
+import re
 import zipfile
 from typing import AsyncGenerator
 
@@ -63,10 +64,29 @@ async def export_project(project_id: str):
         for task in project.tasks:
             if task.result and task.result.code_blocks:
                 for file_path, content in task.result.code_blocks.items():
-                    safe_path = file_path.strip()
-                    if not safe_path:
-                        safe_path = f"unnamed_{task.id[:8]}_{files_added}.txt"
-                    zip_file.writestr(safe_path, content)
+                    # Sanitize the file path extracted from markdown headers
+                    clean_path = re.sub(r"^#+\s*", "", file_path)
+                    clean_path = re.sub(r"^[\d\.\s]+", "", clean_path)
+                    clean_path = clean_path.replace("`", "").strip()
+                    
+                    # Handle cases like "Tailwind Config (tailwind.config.js)"
+                    match = re.search(r"\(([^)]+)\)", clean_path)
+                    if match:
+                        clean_path = match.group(1).replace("`", "").strip()
+                        
+                    if not clean_path:
+                        clean_path = f"unnamed_{task.id[:8]}_{files_added}.txt"
+                        
+                    # Prepend appropriate folder if not already there
+                    folder = "frontend" if task.agent_type.value == "frontend" else "backend"
+                    if not clean_path.startswith(f"{folder}/"):
+                        clean_path = f"{folder}/{clean_path.lstrip('/')}"
+                        
+                    if "requirements.txt" in clean_path.lower():
+                        # Remove strict version pinning to prevent native compilation issues (e.g. rustup for pydantic-core)
+                        content = re.sub(r"==[^\s]+", "", content)
+
+                    zip_file.writestr(clean_path, content)
                     files_added += 1
         
         # Inject executable run scripts
@@ -77,6 +97,7 @@ echo.
 IF EXIST "backend" (
     echo [Backend] Installing requirements...
     cd backend
+    python -m pip install --upgrade pip
     pip install -r requirements.txt
     echo [Backend] Starting server...
     start cmd /k "uvicorn app.main:app --reload --port 8000"
@@ -88,7 +109,12 @@ IF EXIST "frontend" (
     cd frontend
     call npm install
     echo [Frontend] Starting server...
-    start cmd /k "npm run dev"
+    findstr /C:"\"dev\":" package.json >nul
+    if %errorlevel% equ 0 (
+        start cmd /k "npm run dev"
+    ) else (
+        start cmd /k "npm start"
+    )
     cd ..
 )
 
@@ -101,6 +127,7 @@ echo "Starting NexusForge Generated App..."
 if [ -d "backend" ]; then
     echo "[Backend] Installing requirements..."
     cd backend
+    python3 -m pip install --upgrade pip
     pip3 install -r requirements.txt
     echo "[Backend] Starting server on port 8000..."
     uvicorn app.main:app --reload --port 8000 &
@@ -112,7 +139,11 @@ if [ -d "frontend" ]; then
     cd frontend
     npm install
     echo "[Frontend] Starting server..."
-    npm run dev &
+    if grep -q '"dev":' package.json; then
+        npm run dev &
+    else
+        npm start &
+    fi
     cd ..
 fi
 
