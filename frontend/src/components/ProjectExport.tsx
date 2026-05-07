@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Download, Loader2 } from 'lucide-react'
+import { Download, Loader2, Play } from 'lucide-react'
 import { Project } from '../types'
 
 export default function ProjectExport({ project }: { project: Project }) {
   const [isExporting, setIsExporting] = useState(false)
+  const [isLaunching, setIsLaunching] = useState(false)
 
   const handleExport = async () => {
     try {
@@ -31,14 +32,43 @@ export default function ProjectExport({ project }: { project: Project }) {
     }
   }
 
+  const handleLaunch = async () => {
+    try {
+      setIsLaunching(true)
+      const response = await fetch(`/api/projects/${project.id}/launch`, { method: 'POST' })
+      
+      if (!response.ok) {
+        throw new Error('Launch failed')
+      }
+      
+      alert('App successfully launched! Check the newly opened terminal windows on your desktop.')
+    } catch (error) {
+      console.error('Error launching project:', error)
+      alert('Failed to launch project. Please ensure there are completed tasks with generated files.')
+    } finally {
+      setIsLaunching(false)
+    }
+  }
+
   return (
-    <button 
-      onClick={handleExport}
-      disabled={isExporting}
-      className="bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border px-4 py-2 rounded-md flex items-center gap-2 transition-colors text-sm font-medium disabled:opacity-50"
-    >
-      {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} 
-      {isExporting ? 'Exporting...' : 'Export ZIP'}
-    </button>
+    <div className="flex items-center gap-2">
+      <button 
+        onClick={handleLaunch}
+        disabled={isLaunching || isExporting}
+        className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md flex items-center gap-2 transition-colors text-sm font-medium disabled:opacity-50"
+      >
+        {isLaunching ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />} 
+        {isLaunching ? 'Launching...' : 'Launch App'}
+      </button>
+
+      <button 
+        onClick={handleExport}
+        disabled={isExporting || isLaunching}
+        className="bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border px-4 py-2 rounded-md flex items-center gap-2 transition-colors text-sm font-medium disabled:opacity-50"
+      >
+        {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} 
+        {isExporting ? 'Exporting...' : 'Export ZIP'}
+      </button>
+    </div>
   )
 }

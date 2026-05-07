@@ -1,0 +1,30 @@
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── v1/
+│   │   │   ├── __init__.py
+│   │   │   ├── endpoints/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── tasks.py
+│   │   │   │   └── health.py
+│   │   │   └── routers.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── security.py
+│   │   └── logging.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── task.py
+│   │   └── schemas.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── task_service.py
+│   └── utils/
+│       ├── __init__.py
+│       └── exceptions.py
+├── requirements.txt
+└── .env.example

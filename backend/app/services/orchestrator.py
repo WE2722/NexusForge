@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+import json
 from datetime import datetime, timezone
 
 import structlog
@@ -19,6 +20,7 @@ from app.agents.review_agent import ReviewAgent
 from app.core.llm_router import LLMRouter
 from app.core.prompt_refiner import PromptRefiner
 from app.core.token_budget import TokenBudgetManager
+import os
 from app.models.schemas import (
     AgentType,
     Project,
@@ -54,11 +56,34 @@ class Orchestrator:
         }
         self._projects: dict[str, Project] = {}
         self._paused: set[str] = set()
+        self._storage_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "projects.json")
+        self._load_projects()
+
+    def _load_projects(self) -> None:
+        if os.path.exists(self._storage_path):
+            try:
+                with open(self._storage_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for k, v in data.items():
+                        self._projects[k] = Project.model_validate(v)
+                logger.info("projects_loaded", count=len(self._projects))
+            except Exception as e:
+                logger.error("projects_load_error", error=str(e))
+
+    def _save_projects(self) -> None:
+        os.makedirs(os.path.dirname(self._storage_path), exist_ok=True)
+        try:
+            with open(self._storage_path, "w", encoding="utf-8") as f:
+                data = {k: v.model_dump(mode='json') for k, v in self._projects.items()}
+                json.dump(data, f)
+        except Exception as e:
+            logger.error("projects_save_error", error=str(e))
 
     # ── Public API ─────────────────────────────────────────────────
     async def create_project(self, raw_prompt: str) -> Project:
         project = Project(raw_prompt=raw_prompt, status=ProjectStatus.REFINING)
         self._projects[project.id] = project
+        self._save_projects()
         logger.info("project_created", project_id=project.id)
 
         # Step 1: Refine prompt
@@ -88,6 +113,7 @@ class Orchestrator:
         if project_id in self._projects:
             self._paused.add(project_id)
             self._projects[project_id].status = ProjectStatus.PAUSED
+            self._save_projects()
             return True
         return False
 
@@ -95,6 +121,7 @@ class Orchestrator:
         if project_id in self._paused:
             self._paused.discard(project_id)
             self._projects[project_id].status = ProjectStatus.EXECUTING
+            self._save_projects()
             return True
         return False
 
@@ -189,6 +216,7 @@ class Orchestrator:
         project.status = ProjectStatus.COMPLETED if all_done else ProjectStatus.FAILED
         project.completed_at = datetime.now(timezone.utc)
         project.updated_at = datetime.now(timezone.utc)
+        self._save_projects()
 
     async def _execute_task(self, task: Task) -> None:
         agent = self._agents.get(task.agent_type)
@@ -210,6 +238,7 @@ class Orchestrator:
             logger.error("task_execution_error", task_id=task.id, error=str(exc))
         finally:
             task.completed_at = datetime.now(timezone.utc)
+            self._save_projects()
 
     async def close(self) -> None:
         await self.router.close()

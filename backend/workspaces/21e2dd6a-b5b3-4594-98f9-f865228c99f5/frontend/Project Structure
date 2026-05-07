@@ -1,0 +1,11 @@
+todo-list-app/
+components/
+TodoList.tsx
+TodoItem.tsx
+AddTask.tsx
+styles/
+global.css
+tailwind.config.js
+index.tsx
+package.json
+tsconfig.json
