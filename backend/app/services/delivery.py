@@ -73,6 +73,13 @@ class Delivery:
         project_files["README.md"] = readme
         project_files[".env.example"] = env_example
 
+        # Step 3.5: Ensure frontend scaffold files exist
+        has_frontend = any(
+            k.endswith((".tsx", ".ts", ".jsx", ".css")) for k in project_files
+        )
+        if has_frontend:
+            self._inject_scaffold_to_files(project_files, project)
+
         # Step 4: Create ZIP
         zip_filename = f"{project.brief.title.replace(' ', '_')}_{project_id[:8]}.zip"
         zip_path = os.path.join(DELIVERY_DIR, zip_filename)
@@ -118,8 +125,8 @@ class Delivery:
             result.status = "failed"
             return result
 
-        # Compile (which writes files to temp dir)
-        compile_result = await self._compiler.compile_project(project_id, project_files)
+        # Compile and start servers (which writes files to temp dir)
+        compile_result = await self._compiler.compile_project(project_id, project_files, start_servers=True)
 
         result.backend_url = compile_result.backend_url
         result.frontend_url = compile_result.frontend_url
@@ -276,4 +283,98 @@ REACT_APP_API_URL=http://localhost:8008
 
 # External Services (if applicable)
 # REDIS_URL=redis://localhost:6379
+"""
+
+    def _inject_scaffold_to_files(self, files: dict[str, str], project) -> None:
+        """Ensure frontend scaffold files (package.json, etc.) exist in the file dict."""
+        import json
+
+        # Check if any variant of package.json exists
+        has_pkg = any("package.json" in k for k in files)
+        if not has_pkg:
+            title = project.brief.title if project.brief else "app"
+            pkg_name = title.replace(" ", "-").lower()[:30]
+            pkg = {
+                "name": f"{pkg_name}-frontend",
+                "private": True,
+                "version": "1.0.0",
+                "type": "module",
+                "scripts": {
+                    "dev": "vite",
+                    "build": "tsc && vite build",
+                    "preview": "vite preview",
+                    "start": "vite"
+                },
+                "dependencies": {
+                    "react": "^19.0.0",
+                    "react-dom": "^19.0.0",
+                    "lucide-react": "^0.460.0",
+                    "axios": "^1.7.0"
+                },
+                "devDependencies": {
+                    "@types/react": "^19.0.0",
+                    "@types/react-dom": "^19.0.0",
+                    "@vitejs/plugin-react": "^4.3.0",
+                    "typescript": "^5.6.0",
+                    "vite": "^6.0.0",
+                    "@tailwindcss/vite": "^4.0.0",
+                    "tailwindcss": "^4.0.0"
+                }
+            }
+            # Detect extra deps from code
+            all_code = " ".join(files.values())
+            if "react-router-dom" in all_code:
+                pkg["dependencies"]["react-router-dom"] = "^7.0.0"
+            if "zustand" in all_code:
+                pkg["dependencies"]["zustand"] = "^5.0.0"
+
+            files["package.json"] = json.dumps(pkg, indent=2)
+
+        has_vite = any("vite.config" in k for k in files)
+        if not has_vite:
+            files["vite.config.ts"] = """import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  server: { port: 3000, open: true }
+})
+"""
+
+        has_tsconfig = any("tsconfig" in k for k in files)
+        if not has_tsconfig:
+            files["tsconfig.json"] = """{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true
+  },
+  "include": ["src"]
+}
+"""
+
+        has_index = any(k.endswith("index.html") for k in files)
+        if not has_index:
+            files["index.html"] = """<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
 """

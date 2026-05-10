@@ -45,9 +45,15 @@ class AppLauncher:
                 if clean_path.startswith("frontend/") and not clean_path.startswith("frontend/public/"):
                     filename = os.path.basename(clean_path)
                     filename = re.sub(r'^main\.(tsx|ts|jsx|js)$', r'index.\1', filename)
-                    if filename == "package.json":
-                        continue
-                    clean_path = f"frontend/src/{filename}"
+
+                    # Scaffold files go to frontend root, NOT src/
+                    if filename in ("package.json", "vite.config.ts", "tsconfig.json"):
+                        clean_path = f"frontend/{filename}"
+                    elif filename == "index.html":
+                        clean_path = f"frontend/{filename}"
+                    else:
+                        clean_path = f"frontend/src/{filename}"
+
                     if filename.endswith((".tsx", ".ts", ".css", ".js", ".jsx")):
                         content = self._fix_frontend_imports(content)
 
@@ -253,9 +259,8 @@ sys.meta_path.append(FlatImporter())"""
 
         frontend_dir = os.path.join(workspace_dir, "frontend")
         if os.path.exists(frontend_dir):
-            public_dir = os.path.join(frontend_dir, "public")
-            os.makedirs(public_dir, exist_ok=True)
-            index_html = os.path.join(public_dir, "index.html")
+            # Write Vite-compatible index.html to frontend root (if not already present)
+            index_html = os.path.join(frontend_dir, "index.html")
             if not os.path.exists(index_html):
                 with open(index_html, "w", encoding="utf-8") as f:
-                    f.write('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>App</title></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div></body></html>')
+                    f.write('<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8" />\n<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n<title>App</title>\n<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">\n</head>\n<body>\n<div id="root"></div>\n<script type="module" src="/src/main.tsx"></script>\n</body>\n</html>')

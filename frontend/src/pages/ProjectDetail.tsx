@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Layers, PauseCircle, Download, Rocket, Check, Clock, AlertCircle, Loader2, Code, FileText, Wrench, Eye, Package } from 'lucide-react'
+import { Layers, PauseCircle, Download, Rocket, Check, Clock, AlertCircle, Loader2, Code, FileText, Wrench, Eye, Package, ExternalLink, Copy } from 'lucide-react'
 import { useProjects } from '../hooks/useProject'
 import ChatPanel from '../components/ChatPanel'
 import CompilePanel from '../components/CompilePanel'
@@ -103,57 +103,200 @@ function CodeViewer({ files }: { files: Record<string, string> }) {
 
 /* ── Preview Panel ── */
 function PreviewPanel({ projectId }: { projectId: string }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [backendUrl, setBackendUrl] = useState<string | null>(null)
+  const [frontendUrl, setFrontendUrl] = useState<string | null>(null)
+  const [previewId, setPreviewId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<'stopped' | 'starting' | 'running'>('stopped')
+  const [copied, setCopied] = useState<string | null>(null)
 
-  const handleStartPreview = async () => {
+  const copyUrl = (url: string) => {
+    navigator.clipboard.writeText(url)
+    setCopied(url)
+    setTimeout(() => setCopied(null), 1500)
+  }
+
+
+
+  const handleLaunch = async () => {
     setLoading(true)
+    setError(null)
+    setStatus('starting')
     try {
-      const { data } = await axios.post(`/api/projects/${projectId}/preview`)
-      if (data.frontend_url) {
-        setPreviewUrl(data.frontend_url)
-      } else if (data.backend_url) {
-        setPreviewUrl(data.backend_url)
-      }
-    } catch (e) {
-      console.error(e)
+      await axios.post(`/api/projects/${projectId}/launch`)
+      // Default ports for launched apps
+      setBackendUrl('http://localhost:8008')
+      setFrontendUrl('http://localhost:3000')
+      setStatus('running')
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Failed to launch')
+      setStatus('stopped')
     } finally {
       setLoading(false)
     }
   }
 
-  if (!previewUrl) {
+  const handleStop = async () => {
+    setStopping(true)
+    try {
+      if (previewId) {
+        await axios.delete(`/api/projects/${projectId}/preview/${previewId}`)
+      }
+      await axios.post(`/api/projects/${projectId}/stop`)
+      setStatus('stopped')
+      setBackendUrl(null)
+      setFrontendUrl(null)
+      setPreviewId(null)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setStopping(false)
+    }
+  }
+
+  const StatusDot = ({ active }: { active: boolean }) => (
+    <span className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-green-400 animate-pulse' : 'bg-red-500'}`} />
+  )
+
+  // Not started yet
+  if (status === 'stopped' && !backendUrl && !frontendUrl) {
     return (
-      <div className="text-center py-10">
+      <div className="text-center py-10 animate-fade-in">
         <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-white/[0.06] flex items-center justify-center mx-auto mb-4">
           <Eye size={36} className="text-cyan-400/60" />
         </div>
         <h3 className="text-lg font-semibold mb-2">Live Preview</h3>
         <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-          Start a live preview to see your app running. Preview servers auto-stop after 1 hour.
+          Start servers to preview your app. Backend and frontend will be launched on dynamic ports.
         </p>
-        <button onClick={handleStartPreview} disabled={loading} className="btn-primary text-base px-8 py-3">
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <Eye size={18} />}
-          {loading ? 'Starting...' : 'Start Preview'}
-        </button>
+        {error && (
+          <div className="mb-4 mx-auto max-w-md px-4 py-3 rounded-xl bg-red-500/5 border border-red-500/10 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+        <div className="flex gap-3 justify-center">
+          <button onClick={handleLaunch} disabled={loading} className="btn-primary text-base px-8 py-3">
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
+            {loading ? 'Starting...' : 'Launch App'}
+          </button>
+        </div>
       </div>
     )
   }
 
+  // Running state with URLs
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-sm text-green-400 font-medium">Preview Running</span>
+    <div className="space-y-5 animate-fade-in">
+      {/* Status Header */}
+      <div className="glass-card-static p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <StatusDot active={status === 'running'} />
+            <span className={`text-sm font-semibold ${status === 'running' ? 'text-green-400' : status === 'starting' ? 'text-amber-400' : 'text-red-400'}`}>
+              {status === 'running' ? 'Servers Running' : status === 'starting' ? 'Starting...' : 'Stopped'}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleLaunch} disabled={loading} className="btn-secondary text-xs py-1.5 px-3">
+              {loading ? <Loader2 size={12} className="animate-spin" /> : <Rocket size={12} />} Restart
+            </button>
+            <button onClick={handleStop} disabled={stopping} className="text-xs py-1.5 px-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all font-medium flex items-center gap-1.5">
+              {stopping ? <Loader2 size={12} className="animate-spin" /> : <PauseCircle size={12} />} Stop
+            </button>
+          </div>
         </div>
-        <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs py-1.5 px-3">
-          Open in New Tab
-        </a>
+
+        {/* URL Cards */}
+        <div className="space-y-3">
+          {/* Frontend URL */}
+          {frontendUrl && (
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500/15 to-blue-500/15 flex items-center justify-center shrink-0">
+                <span className="text-lg">🌐</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Frontend</p>
+                <a href={frontendUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-mono text-cyan-400 hover:text-cyan-300 transition-colors truncate block">
+                  {frontendUrl}
+                </a>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={() => copyUrl(frontendUrl)} className="p-2 rounded-lg hover:bg-white/[0.04] transition-colors text-muted-foreground hover:text-white">
+                  {copied === frontendUrl ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                </button>
+                <a href={frontendUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-white/[0.04] transition-colors text-muted-foreground hover:text-white">
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Backend URL */}
+          {backendUrl && (
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500/15 to-orange-500/15 flex items-center justify-center shrink-0">
+                <span className="text-lg">⚙️</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Backend API</p>
+                <a href={backendUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-mono text-amber-400 hover:text-amber-300 transition-colors truncate block">
+                  {backendUrl}
+                </a>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={() => copyUrl(backendUrl)} className="p-2 rounded-lg hover:bg-white/[0.04] transition-colors text-muted-foreground hover:text-white">
+                  {copied === backendUrl ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                </button>
+                <a href={backendUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-white/[0.04] transition-colors text-muted-foreground hover:text-white">
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* API Docs URL */}
+          {backendUrl && (
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/15 to-indigo-500/15 flex items-center justify-center shrink-0">
+                <span className="text-lg">📚</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">API Documentation</p>
+                <a href={`${backendUrl}/docs`} target="_blank" rel="noopener noreferrer" className="text-sm font-mono text-purple-400 hover:text-purple-300 transition-colors truncate block">
+                  {backendUrl}/docs
+                </a>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                <button onClick={() => copyUrl(`${backendUrl}/docs`)} className="p-2 rounded-lg hover:bg-white/[0.04] transition-colors text-muted-foreground hover:text-white">
+                  {copied === `${backendUrl}/docs` ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                </button>
+                <a href={`${backendUrl}/docs`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-white/[0.04] transition-colors text-muted-foreground hover:text-white">
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      <div className="rounded-xl overflow-hidden border border-white/[0.06] h-[500px]">
-        <iframe src={previewUrl} className="w-full h-full bg-white" title="Project Preview" />
-      </div>
+
+      {/* Live Preview iframe */}
+      {frontendUrl && (
+        <div className="glass-card-static p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Eye size={14} className="text-cyan-400" /> Live Preview
+            </h3>
+            <a href={frontendUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs py-1.5 px-3">
+              <ExternalLink size={12} /> Full Screen
+            </a>
+          </div>
+          <div className="rounded-xl overflow-hidden border border-white/[0.06] h-[450px]">
+            <iframe src={frontendUrl} className="w-full h-full bg-white" title="Project Preview" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

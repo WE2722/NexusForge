@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Key, Plus, Trash2, Eye, EyeOff, Check, Copy, Shield } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Trash2, Eye, EyeOff, Check, Copy, Shield, Loader2, Zap, XCircle } from 'lucide-react'
+import axios from 'axios'
 
 const PROVIDERS = [
   { id: 'google', label: 'Google Gemini', icon: '🔮', description: 'Gemini Flash & Pro models', envKey: 'GOOGLE_API_KEYS' },
@@ -13,17 +14,50 @@ interface KeyEntry {
   value: string
   label: string
   active: boolean
+  testStatus?: 'idle' | 'testing' | 'valid' | 'invalid'
+  testError?: string
 }
 
 export default function ApiKeys() {
   const [providerKeys, setProviderKeys] = useState<Record<string, KeyEntry[]>>({
-    google: [{ id: '1', value: '', label: 'Primary', active: true }],
-    groq: [{ id: '1', value: '', label: 'Primary', active: true }],
-    mistral: [{ id: '1', value: '', label: 'Primary', active: true }],
-    openrouter: [{ id: '1', value: '', label: 'Primary', active: true }],
+    google: [{ id: '1', value: '', label: 'Primary', active: true, testStatus: 'idle' }],
+    groq: [{ id: '1', value: '', label: 'Primary', active: true, testStatus: 'idle' }],
+    mistral: [{ id: '1', value: '', label: 'Primary', active: true, testStatus: 'idle' }],
+    openrouter: [{ id: '1', value: '', label: 'Primary', active: true, testStatus: 'idle' }],
   })
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [copied, setCopied] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  // Load existing keys on mount
+  useEffect(() => {
+    loadKeys()
+  }, [])
+
+  const loadKeys = async () => {
+    try {
+      const { data } = await axios.get('/api/keys')
+      const loaded: Record<string, KeyEntry[]> = {}
+      for (const provider of PROVIDERS) {
+        const savedKeys = data[provider.id] || []
+        if (savedKeys.length > 0) {
+          loaded[provider.id] = savedKeys.map((k: any, i: number) => ({
+            id: String(i + 1),
+            value: '', // Don't show actual keys, just show masked placeholder
+            label: i === 0 ? 'Primary' : `Key ${i + 1}`,
+            active: k.active,
+            testStatus: 'valid' as const, // Already saved = previously validated
+          }))
+        } else {
+          loaded[provider.id] = [{ id: '1', value: '', label: 'Primary', active: true, testStatus: 'idle' }]
+        }
+      }
+      setProviderKeys(loaded)
+    } catch {
+      // API may not be ready yet
+    }
+  }
 
   const addKey = (providerId: string) => {
     setProviderKeys(prev => ({
@@ -33,6 +67,7 @@ export default function ApiKeys() {
         value: '',
         label: `Key ${prev[providerId].length + 1}`,
         active: true,
+        testStatus: 'idle' as const,
       }]
     }))
   }
@@ -47,8 +82,69 @@ export default function ApiKeys() {
   const updateKey = (providerId: string, keyId: string, value: string) => {
     setProviderKeys(prev => ({
       ...prev,
-      [providerId]: prev[providerId].map(k => k.id === keyId ? { ...k, value } : k)
+      [providerId]: prev[providerId].map(k =>
+        k.id === keyId ? { ...k, value, testStatus: 'idle' as const } : k
+      )
     }))
+  }
+
+  const testKey = async (providerId: string, keyId: string) => {
+    const key = providerKeys[providerId]?.find(k => k.id === keyId)
+    if (!key || !key.value) return
+
+    // Set testing status
+    setProviderKeys(prev => ({
+      ...prev,
+      [providerId]: prev[providerId].map(k =>
+        k.id === keyId ? { ...k, testStatus: 'testing' as const } : k
+      )
+    }))
+
+    try {
+      const { data } = await axios.post('/api/keys/test', {
+        provider: providerId,
+        key: key.value,
+      })
+
+      setProviderKeys(prev => ({
+        ...prev,
+        [providerId]: prev[providerId].map(k =>
+          k.id === keyId ? {
+            ...k,
+            testStatus: data.valid ? 'valid' as const : 'invalid' as const,
+            testError: data.valid ? undefined : data.error,
+          } : k
+        )
+      }))
+    } catch (e: any) {
+      setProviderKeys(prev => ({
+        ...prev,
+        [providerId]: prev[providerId].map(k =>
+          k.id === keyId ? { ...k, testStatus: 'invalid' as const, testError: 'Connection failed' } : k
+        )
+      }))
+    }
+  }
+
+  const saveAllKeys = async () => {
+    setSaving(true)
+    try {
+      for (const provider of PROVIDERS) {
+        const keys = providerKeys[provider.id]?.filter(k => k.value.trim()) || []
+        if (keys.length > 0) {
+          await axios.post('/api/keys', {
+            provider: provider.id,
+            keys: keys.map(k => k.value.trim()),
+          })
+        }
+      }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      console.error('Failed to save keys:', e)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const copyKey = (key: string) => {
@@ -81,7 +177,7 @@ export default function ApiKeys() {
       <div className="space-y-4">
         {PROVIDERS.map(provider => {
           const keys = providerKeys[provider.id] || []
-          const configuredCount = keys.filter(k => k.value.length > 5).length
+          const configuredCount = keys.filter(k => k.value.length > 5 || k.testStatus === 'valid').length
 
           return (
             <div key={provider.id} className="glass-card-static overflow-hidden">
@@ -141,6 +237,30 @@ export default function ApiKeys() {
                         )}
                       </div>
                     </div>
+
+                    {/* Test Button */}
+                    <button
+                      onClick={() => testKey(provider.id, key.id)}
+                      disabled={!key.value || key.testStatus === 'testing'}
+                      className={`shrink-0 text-xs py-1.5 px-3 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                        key.testStatus === 'valid'
+                          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                          : key.testStatus === 'invalid'
+                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          : 'bg-white/[0.04] text-muted-foreground hover:text-white border border-white/[0.06] hover:bg-white/[0.06]'
+                      } disabled:opacity-30 disabled:cursor-not-allowed`}
+                    >
+                      {key.testStatus === 'testing' ? (
+                        <><Loader2 size={12} className="animate-spin" /> Testing...</>
+                      ) : key.testStatus === 'valid' ? (
+                        <><Check size={12} /> Valid</>
+                      ) : key.testStatus === 'invalid' ? (
+                        <><XCircle size={12} /> Invalid</>
+                      ) : (
+                        <><Zap size={12} /> Test</>
+                      )}
+                    </button>
+
                     {keys.length > 1 && (
                       <button
                         onClick={() => removeKey(provider.id, key.id)}
@@ -155,6 +275,19 @@ export default function ApiKeys() {
             </div>
           )
         })}
+      </div>
+
+      {/* Save All */}
+      <div className="flex justify-end">
+        <button onClick={saveAllKeys} disabled={saving} className="btn-primary px-6">
+          {saving ? (
+            <><Loader2 size={16} className="animate-spin" /> Saving...</>
+          ) : saved ? (
+            <><Check size={16} /> Saved!</>
+          ) : (
+            <>Save All Keys</>
+          )}
+        </button>
       </div>
     </div>
   )

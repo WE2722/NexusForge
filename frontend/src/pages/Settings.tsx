@@ -31,10 +31,27 @@ export default function Settings() {
     }
   }
 
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const handleSave = async () => {
+    try {
+      await axios.post('/api/keys/save-all', keys)
+      // Save preferences to localStorage
+      localStorage.setItem('nexusforge_settings', JSON.stringify(keys))
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      console.error('Failed to save settings:', e)
+    }
   }
+
+  // Load saved keys from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('nexusforge_settings')
+    if (saved) {
+      try {
+        setKeys(JSON.parse(saved))
+      } catch {}
+    }
+  }, [])
 
   const tabs = [
     { id: 'keys' as const, label: 'API Keys', icon: Key },
