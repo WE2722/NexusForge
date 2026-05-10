@@ -125,10 +125,10 @@ function PreviewPanel({ projectId }: { projectId: string }) {
     setError(null)
     setStatus('starting')
     try {
-      await axios.post(`/api/projects/${projectId}/launch`)
-      // Default ports for launched apps
-      setBackendUrl('http://localhost:8008')
-      setFrontendUrl('http://localhost:3000')
+      const { data } = await axios.post(`/api/projects/${projectId}/launch`)
+      // Use URLs from the API response (dynamic ports)
+      setBackendUrl(data.backend_url || 'http://localhost:8008')
+      setFrontendUrl(data.frontend_url || 'http://localhost:3000')
       setStatus('running')
     } catch (e: any) {
       setError(e.response?.data?.detail || 'Failed to launch')
@@ -302,23 +302,29 @@ function PreviewPanel({ projectId }: { projectId: string }) {
 }
 
 /* ── Download Panel ── */
-function DownloadPanel({ projectId, projectTitle }: { projectId: string; projectTitle: string }) {
+function DownloadPanel({ projectId, projectTitle, allFiles }: { projectId: string; projectTitle: string; allFiles: Record<string, string> }) {
   const [delivering, setDelivering] = useState(false)
   const [delivered, setDelivered] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fileNames = Object.keys(allFiles)
+  const totalSize = Object.values(allFiles).reduce((sum, content) => sum + content.length, 0)
 
   const handleDeliver = async () => {
     setDelivering(true)
+    setError(null)
     try {
       await axios.post(`/api/projects/${projectId}/deliver`)
       setDelivered(true)
-    } catch (e) {
-      console.error(e)
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Packaging failed')
     } finally {
       setDelivering(false)
     }
   }
 
   const handleDownload = async () => {
+    setError(null)
     try {
       const resp = await axios.get(`/api/projects/${projectId}/download`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([resp.data]))
@@ -328,7 +334,6 @@ function DownloadPanel({ projectId, projectTitle }: { projectId: string; project
       a.click()
       window.URL.revokeObjectURL(url)
     } catch (e) {
-      console.error(e)
       // Fallback to export endpoint
       try {
         const resp = await axios.get(`/api/projects/${projectId}/export`, { responseType: 'blob' })
@@ -338,36 +343,71 @@ function DownloadPanel({ projectId, projectTitle }: { projectId: string; project
         a.download = `${projectTitle.replace(/\s/g, '_') || 'project'}.zip`
         a.click()
         window.URL.revokeObjectURL(url)
-      } catch (e2) {
-        console.error(e2)
+      } catch (e2: any) {
+        setError(e2.response?.data?.detail || 'Download failed')
       }
     }
   }
 
   return (
-    <div className="text-center py-10">
-      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-white/[0.06] flex items-center justify-center mx-auto mb-4">
-        <Download size={36} className="text-green-400/60" />
-      </div>
-      <h3 className="text-lg font-semibold mb-2">Download Project</h3>
-      <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-        Package your project with README, .env.example, and all source code in a ZIP file.
-      </p>
-      <div className="flex gap-3 justify-center">
-        {!delivered ? (
-          <button onClick={handleDeliver} disabled={delivering} className="btn-primary text-base px-8 py-3">
-            {delivering ? <Loader2 size={18} className="animate-spin" /> : <Package size={18} />}
-            {delivering ? 'Packaging...' : 'Package & Deliver'}
-          </button>
-        ) : (
-          <button onClick={handleDownload} className="btn-primary text-base px-8 py-3">
-            <Download size={18} /> Download ZIP
-          </button>
+    <div className="space-y-6 animate-fade-in">
+      {/* Download Header */}
+      <div className="text-center py-6">
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-white/[0.06] flex items-center justify-center mx-auto mb-4">
+          <Download size={36} className="text-green-400/60" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">Download Project</h3>
+        <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+          Package your project with README, .env.example, and all source code in a ZIP file.
+        </p>
+        {error && (
+          <div className="mb-4 mx-auto max-w-md px-4 py-3 rounded-xl bg-red-500/5 border border-red-500/10 text-sm text-red-400">
+            {error}
+          </div>
         )}
-        <button onClick={handleDownload} className="btn-secondary text-base px-6 py-3">
-          <Download size={18} /> Quick Export
-        </button>
+        <div className="flex gap-3 justify-center">
+          {!delivered ? (
+            <button onClick={handleDeliver} disabled={delivering} className="btn-primary text-base px-8 py-3">
+              {delivering ? <Loader2 size={18} className="animate-spin" /> : <Package size={18} />}
+              {delivering ? 'Packaging...' : 'Package & Deliver'}
+            </button>
+          ) : (
+            <button onClick={handleDownload} className="btn-primary text-base px-8 py-3">
+              <Download size={18} /> Download ZIP
+            </button>
+          )}
+          <button onClick={handleDownload} className="btn-secondary text-base px-6 py-3">
+            <Download size={18} /> Quick Export
+          </button>
+        </div>
       </div>
+
+      {/* File List */}
+      {fileNames.length > 0 && (
+        <div className="glass-card-static p-5">
+          <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <FileText size={14} className="text-accent" />
+            Files in Package ({fileNames.length})
+            <span className="text-xs text-muted-foreground ml-auto">
+              ~{(totalSize / 1024).toFixed(1)} KB
+            </span>
+          </h4>
+          <div className="space-y-1 max-h-64 overflow-y-auto">
+            {fileNames.sort().map(name => (
+              <div key={name} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/[0.02] text-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                <span className="font-mono text-gray-300 truncate">{name}</span>
+                <span className="text-muted-foreground ml-auto shrink-0">
+                  {(allFiles[name].length / 1024).toFixed(1)} KB
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 pt-3 border-t border-white/[0.04] text-xs text-muted-foreground">
+            Includes: package.json, README.md, .env.example, all source files
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -593,6 +633,7 @@ export default function ProjectDetail() {
         <DownloadPanel
           projectId={id}
           projectTitle={activeProject.brief?.title || 'project'}
+          allFiles={allFiles}
         />
       )}
 

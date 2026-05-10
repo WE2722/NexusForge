@@ -1,10 +1,11 @@
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, PlusCircle, Activity, Settings, Zap, Key } from 'lucide-react'
+import { LayoutDashboard, PlusCircle, Activity, Settings, Zap, Key, TrendingUp } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/create', icon: PlusCircle, label: 'New Project' },
   { to: '/agents', icon: Activity, label: 'Agent Network' },
+  { to: '/tokens', icon: TrendingUp, label: 'Token Usage' },
   { to: '/keys', icon: Key, label: 'API Keys' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]

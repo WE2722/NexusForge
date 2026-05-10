@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import socket
 import subprocess
 import signal
 import sys
@@ -13,6 +14,15 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 WORKSPACES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "workspaces"))
+
+
+def find_free_port(start: int = 9000, end: int = 9999) -> int:
+    """Find a free TCP port in the given range."""
+    for port in range(start, end):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('localhost', port)) != 0:
+                return port
+    raise RuntimeError(f"No free ports in range {start}-{end}")
 
 
 class AppLauncher:
@@ -83,26 +93,49 @@ class AppLauncher:
         }
 
     def launch_project(self, project_id: str) -> dict[str, Any]:
-        """Launch a previously extracted project."""
+        """Launch a previously extracted project with dynamic ports."""
         workspace_dir = os.path.join(WORKSPACES_DIR, project_id)
         if not os.path.exists(workspace_dir):
             return {"success": False, "error": "Workspace not found. Extract the project first."}
 
+        # Find free ports
+        try:
+            backend_port = find_free_port(9000, 9499)
+            frontend_port = find_free_port(9500, 9999)
+        except RuntimeError as e:
+            return {"success": False, "error": str(e)}
+
+        # Rewrite the bat script with dynamic ports
+        self._write_support_files(workspace_dir, backend_port=backend_port, frontend_port=frontend_port)
+
         bat_path = os.path.join(workspace_dir, "run_app.bat")
-        if not os.path.exists(bat_path):
-            self._write_support_files(workspace_dir)
 
         try:
             proc = subprocess.Popen(
                 ["cmd.exe", "/c", "start", "cmd", "/c", "run_app.bat"],
                 cwd=workspace_dir,
             )
+            backend_url = f"http://localhost:{backend_port}"
+            frontend_url = f"http://localhost:{frontend_port}"
             self._running_processes[project_id] = {
                 "pid": proc.pid,
                 "workspace": workspace_dir,
+                "backend_port": backend_port,
+                "frontend_port": frontend_port,
+                "backend_url": backend_url,
+                "frontend_url": frontend_url,
             }
-            logger.info("project_launched", project_id=project_id, workspace=workspace_dir)
-            return {"success": True, "workspace": workspace_dir, "pid": proc.pid}
+            logger.info("project_launched", project_id=project_id, workspace=workspace_dir,
+                        backend_port=backend_port, frontend_port=frontend_port)
+            return {
+                "success": True,
+                "workspace": workspace_dir,
+                "pid": proc.pid,
+                "backend_url": backend_url,
+                "frontend_url": frontend_url,
+                "backend_port": backend_port,
+                "frontend_port": frontend_port,
+            }
         except Exception as e:
             logger.error("launch_failed", project_id=project_id, error=str(e))
             return {"success": False, "error": str(e)}
@@ -112,9 +145,18 @@ class AppLauncher:
         info = self._running_processes.pop(project_id, None)
         stopped = []
         try:
-            # Kill any uvicorn on port 8008 and npm on port 3000
+            # Kill processes on the dynamic ports
+            ports_to_kill = []
+            if info:
+                if "backend_port" in info:
+                    ports_to_kill.append(info["backend_port"])
+                if "frontend_port" in info:
+                    ports_to_kill.append(info["frontend_port"])
+            if not ports_to_kill:
+                ports_to_kill = [8008, 3000]  # fallback defaults
+
             if sys.platform == "win32":
-                for port in [8008, 3000]:
+                for port in ports_to_kill:
                     subprocess.run(
                         ["powershell", "-Command",
                          f"Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | "
@@ -137,6 +179,8 @@ class AppLauncher:
             "workspace_exists": os.path.exists(workspace),
             "running": info is not None,
             "pid": info["pid"] if info else None,
+            "backend_url": info.get("backend_url") if info else None,
+            "frontend_url": info.get("frontend_url") if info else None,
         }
 
     # ── Private Helpers ────────────────────────────────────────────
@@ -186,9 +230,9 @@ class AppLauncher:
         content = re.sub(r'python\s+main\.py\s*\n?', '', content)
         return content
 
-    def _write_support_files(self, workspace_dir: str) -> None:
+    def _write_support_files(self, workspace_dir: str, backend_port: int = 8008, frontend_port: int = 3000) -> None:
         """Write run scripts and support files to workspace."""
-        bat_script = """@echo off
+        bat_script = f"""@echo off
 echo Starting NexusForge Generated App...
 echo.
 
@@ -205,12 +249,12 @@ IF EXIST "backend" (
     echo [Backend] Ensuring core dependencies...
     pip install fastapi uvicorn pydantic pydantic-settings
 
-    echo [Backend] Starting server on port 8008...
+    echo [Backend] Starting server on port {backend_port}...
     set PYTHONPATH=%cd%
     IF EXIST "main.py" (
-        start cmd /k "call venv\\Scripts\\activate.bat && set PYTHONPATH=%%cd%% && uvicorn main:app --reload --host 0.0.0.0 --port 8008"
+        start cmd /k "call venv\\Scripts\\activate.bat && set PYTHONPATH=%%cd%% && uvicorn main:app --reload --host 0.0.0.0 --port {backend_port}"
     ) ELSE IF EXIST "app\\main.py" (
-        start cmd /k "call venv\\Scripts\\activate.bat && set PYTHONPATH=%%cd%% && uvicorn app.main:app --reload --host 0.0.0.0 --port 8008"
+        start cmd /k "call venv\\Scripts\\activate.bat && set PYTHONPATH=%%cd%% && uvicorn app.main:app --reload --host 0.0.0.0 --port {backend_port}"
     ) ELSE (
         echo [Backend] WARNING: Entry point not found!
     )
@@ -222,15 +266,23 @@ IF EXIST "frontend" (
     cd frontend
 
     IF NOT EXIST "package.json" (
-        echo {"name":"app","version":"1.0.0","scripts":{"start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1","react-router-dom":"^6.22.0","lucide-react":"^0.344.0","axios":"^1.6.7","tailwindcss":"^3.4.1"},"browserslist":{"production":[">0.2%%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}} > package.json
+        echo {{"name":"app","version":"1.0.0","scripts":{{"start":"react-scripts start"}},"dependencies":{{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1","react-router-dom":"^6.22.0","lucide-react":"^0.344.0","axios":"^1.6.7","tailwindcss":"^3.4.1"}},"browserslist":{{"production":[">0.2%%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}}}} > package.json
     )
 
     call npm install --legacy-peer-deps
-    echo [Frontend] Starting server...
-    start cmd /k "npm start"
+    echo [Frontend] Starting server on port {frontend_port}...
+    set PORT={frontend_port}
+    start cmd /k "set PORT={frontend_port} && npm start"
     cd ..
 )
 
+echo.
+echo ============================================
+echo   Backend:  http://localhost:{backend_port}
+echo   Frontend: http://localhost:{frontend_port}
+echo   API Docs: http://localhost:{backend_port}/docs
+echo ============================================
+echo.
 echo Done! The app is launching in new windows.
 pause
 """

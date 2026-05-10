@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Send, Sparkles, ArrowLeft, ArrowRight, Check, Cpu, Code, Layout, Database } from 'lucide-react'
+import { Send, Sparkles, ArrowLeft, ArrowRight, Check, Cpu, Code, Layout, Database, Lightbulb, AlertTriangle } from 'lucide-react'
 import { useProjects } from '../hooks/useProject'
+import axios from 'axios'
 
 const STEPS = ['Describe', 'Configure', 'Review', 'Launch']
 
@@ -21,6 +22,13 @@ const TECH_OPTIONS = [
   { id: 'websocket', label: 'WebSocket', icon: '🔌', category: 'backend' },
 ]
 
+interface Suggestions {
+  suggested_stack: string[]
+  pitfalls: string[]
+  success_rate: number
+  matched_pattern: string | null
+}
+
 export default function ProjectCreator() {
   const [searchParams] = useSearchParams()
   const templateName = searchParams.get('template')
@@ -30,8 +38,28 @@ export default function ProjectCreator() {
   const [prompt, setPrompt] = useState(initialPrompt)
   const [selectedTech, setSelectedTech] = useState<string[]>(['fastapi', 'react', 'typescript'])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [suggestions, setSuggestions] = useState<Suggestions | null>(null)
   const { createProject } = useProjects()
   const navigate = useNavigate()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Fetch suggestions when prompt changes (debounced)
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!prompt || prompt.length < 10) {
+      setSuggestions(null)
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await axios.get('/api/suggestions', { params: { prompt } })
+        setSuggestions(data)
+      } catch (e) {
+        // Silently fail — suggestions are optional
+      }
+    }, 600)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [prompt])
 
   const handleSubmit = async () => {
     if (!prompt.trim() || isSubmitting) return
@@ -117,6 +145,43 @@ export default function ProjectCreator() {
                 </button>
               ))}
             </div>
+
+            {/* AI Suggestions Panel */}
+            {suggestions && suggestions.matched_pattern && (
+              <div className="mt-4 p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/15 space-y-3 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <Lightbulb size={14} className="text-indigo-400" />
+                  <span className="text-xs font-semibold text-indigo-300 uppercase tracking-wider">AI Suggestions</span>
+                  <span className="ml-auto text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full border border-green-500/20 font-medium">
+                    {suggestions.success_rate}% success rate
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">Recommended Tech Stack:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {suggestions.suggested_stack.map(tech => (
+                      <span key={tech} className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {suggestions.pitfalls.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <AlertTriangle size={10} /> Common Pitfalls to Avoid:
+                    </p>
+                    <ul className="space-y-1">
+                      {suggestions.pitfalls.map((p, i) => (
+                        <li key={i} className="text-[11px] text-amber-300/80 flex items-start gap-1.5">
+                          <span className="text-amber-400 mt-0.5">•</span> {p}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -112,7 +112,15 @@ async def launch_project(project_id: str):
     if not launch_result["success"]:
         raise HTTPException(status_code=500, detail=launch_result.get("error", "Launch failed"))
 
-    return {"success": True, "message": "App launched", "workspace": launch_result["workspace"]}
+    return {
+        "success": True,
+        "message": "App launched",
+        "workspace": launch_result["workspace"],
+        "backend_url": launch_result.get("backend_url"),
+        "frontend_url": launch_result.get("frontend_url"),
+        "backend_port": launch_result.get("backend_port"),
+        "frontend_port": launch_result.get("frontend_port"),
+    }
 
 
 @router.post("/projects/{project_id}/stop")
@@ -201,6 +209,42 @@ async def health_check():
             "compiler": "ok",
         }
     )
+
+
+@router.get("/tokens")
+async def get_token_usage():
+    """Get aggregate token usage across all providers and agents."""
+    return orchestrator.budget.get_aggregate_stats()
+
+
+@router.get("/projects/{project_id}/similar")
+async def get_similar_projects(project_id: str):
+    """Return projects similar to the given one, with suggestions."""
+    from app.services.project_memory import ProjectMemory
+    memory = ProjectMemory()
+    project = await orchestrator.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    query = project.brief.description if project.brief else project.raw_prompt
+    similar = await memory.search_similar(query, limit=5)
+
+    # Also search by prompt for in-memory fallback
+    suggestions = memory.get_suggestions_for_prompt(query)
+
+    return {
+        "similar_projects": similar,
+        "suggestions": suggestions,
+    }
+
+
+@router.get("/suggestions")
+async def get_prompt_suggestions(prompt: str = ""):
+    """Get tech stack suggestions based on a project description prompt."""
+    from app.services.project_memory import ProjectMemory
+    memory = ProjectMemory()
+    suggestions = memory.get_suggestions_for_prompt(prompt)
+    return suggestions
 
 
 # ── Compile Endpoints ──────────────────────────────────────────────

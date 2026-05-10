@@ -60,6 +60,12 @@ class TokenBudgetManager:
         self._buckets: dict[LLMProvider, UsageBucket] = {
             p: UsageBucket() for p in LLMProvider
         }
+        # Per-agent tracking: agent_name -> {calls, tokens}
+        self._agent_usage: dict[str, dict[str, int]] = {}
+        # Total project count (incremented externally)
+        self._total_projects: int = 0
+        # Cumulative token total across all time
+        self._total_tokens_all_time: int = 0
 
     # ── Public API ─────────────────────────────────────────────────
     def track_usage(self, provider: LLMProvider, tokens: int, requests: int = 1) -> list[str]:
@@ -88,8 +94,45 @@ class TokenBudgetManager:
         bucket.requests_made += requests
         bucket.daily_requests += requests
         bucket.monthly_tokens += tokens
+        self._total_tokens_all_time += tokens
 
         return self._check_alerts(provider)
+
+    def track_agent_usage(self, agent_name: str, tokens: int) -> None:
+        """Track token usage per agent."""
+        if agent_name not in self._agent_usage:
+            self._agent_usage[agent_name] = {"calls": 0, "tokens": 0}
+        self._agent_usage[agent_name]["calls"] += 1
+        self._agent_usage[agent_name]["tokens"] += tokens
+
+    def increment_project_count(self) -> None:
+        """Called when a new project is created."""
+        self._total_projects += 1
+
+    def get_aggregate_stats(self) -> dict:
+        """Return aggregate token stats for the /api/tokens endpoint."""
+        providers: dict = {}
+        for provider in LLMProvider:
+            quota = self._quotas.get(provider, ProviderQuota())
+            bucket = self._buckets[provider]
+            total_limit = quota.tokens_per_minute or quota.tokens_per_month or 100_000
+            used = bucket.monthly_tokens or bucket.tokens_used
+            pct = (used / total_limit * 100) if total_limit > 0 else 0
+            remaining_pct = max(0, 100 - pct)
+            providers[provider.value] = {
+                "used": used,
+                "total": total_limit,
+                "percentage": round(pct, 2),
+                "remaining_pct": round(remaining_pct, 2),
+                "can_use": self.can_use(provider),
+                "requests_today": bucket.daily_requests,
+            }
+        return {
+            "providers": providers,
+            "agents": dict(self._agent_usage),
+            "total_projects": self._total_projects,
+            "total_tokens_used": self._total_tokens_all_time,
+        }
 
     def get_remaining(self, provider: LLMProvider) -> dict[str, int]:
         """Return remaining capacity for the provider."""

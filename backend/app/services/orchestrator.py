@@ -87,6 +87,7 @@ class Orchestrator:
         project = Project(raw_prompt=raw_prompt, status=ProjectStatus.REFINING)
         self._projects[project.id] = project
         self._save_projects()
+        self.budget.increment_project_count()
         logger.info("project_created", project_id=project.id)
 
         # Step 1: Refine prompt

@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="NexusForge API",
     description="Multi-Agent Orchestration System",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -51,4 +51,9 @@ app.include_router(keys_router, prefix="/api")
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to NexusForge API"}
+    return {"message": "Welcome to NexusForge API", "version": "2.0.0"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8001, reload=True)

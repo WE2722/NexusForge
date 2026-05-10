@@ -6,6 +6,7 @@ import ProjectDetail from './pages/ProjectDetail';
 import AgentMonitor from './pages/AgentMonitor';
 import Settings from './pages/Settings';
 import ApiKeys from './pages/ApiKeys';
+import TokenDashboard from './pages/TokenDashboard';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="agents" element={<AgentMonitor />} />
         <Route path="settings" element={<Settings />} />
         <Route path="keys" element={<ApiKeys />} />
+        <Route path="tokens" element={<TokenDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
