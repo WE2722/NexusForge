@@ -1,0 +1,17 @@
+src/
+├── components/
+│   ├── CurrencyConverter.tsx
+│   ├── CurrencyInput.tsx
+│   ├── ResultDisplay.tsx
+│   ├── CurrencySelect.tsx
+│   └── ErrorBoundary.tsx
+├── hooks/
+│   └── useCurrencyConversion.ts
+├── types/
+│   └── currency.types.ts
+├── utils/
+│   └── currencyUtils.ts
+├── App.tsx
+├── main.tsx
+└── styles/
+    └── global.css

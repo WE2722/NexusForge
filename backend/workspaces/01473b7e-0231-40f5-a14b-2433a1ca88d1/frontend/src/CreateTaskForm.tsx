@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-interface ICreateTaskFormProps {}
+export interface ICreateTaskFormProps {}
 
 const CreateTaskForm: React.FC<ICreateTaskFormProps> = () => {
   const [title, setTitle] = useState('');

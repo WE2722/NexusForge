@@ -86,37 +86,44 @@ async def export_project(project_id: str):
                     if not clean_path.startswith(f"{folder}/"):
                         clean_path = f"{folder}/{clean_path.lstrip('/')}"
                         
-                    if "requirements.txt" in clean_path.lower():
-                        # Remove strict version pinning to prevent native compilation issues
-                        content = re.sub(r"==[^\s]+", "", content)
+                    if clean_path.startswith("frontend/") and not clean_path.startswith("frontend/public/"):
+                        filename = os.path.basename(clean_path)
+                        filename = re.sub(r'^main\.(tsx|ts|jsx|js)$', r'index.\1', filename)
+                        
+                        if filename == "package.json":
+                            continue
+                            
+                        clean_path = f"frontend/src/{filename}"
+                        
+                        if filename.endswith((".tsx", ".ts", ".css", ".js", ".jsx")):
+                            content = re.sub(r'(from\s+[\'"])(?:\.\/|\.\.\/)+.*\/([^\/]+)([\'"])', r'\1./\2\3', content)
+                            content = re.sub(r'(import\s+[\'"])(?:\.\/|\.\.\/)+.*\/([^\/]+)([\'"])', r'\1./\2\3', content)
+                            content = re.sub(r"^([ \t]*)(interface\s+[A-Z][a-zA-Z0-9_]*\s*\{)", r"\1export \2", content, flags=re.MULTILINE)
+                            content = content.replace("export export ", "export ")
 
-                    # Prevent Python standard library shadowing
                     if clean_path == "backend/logging.py":
                         clean_path = "backend/custom_logger.py"
-                        
+
                     if clean_path.endswith(".py"):
-                        # Fix imports if logging.py was renamed
-                        content = content.replace("from logging import ", "from custom_logger import ")
-                        content = content.replace("import logging\n", "import custom_logger\n")
-                        # Fix AI syntax error: missing colon
+                        lines = content.split('\n')
+                        for i, line in enumerate(lines):
+                            if line.startswith("from pydantic import") and "BaseSettings" in line:
+                                new_line = line.replace("BaseSettings, ", "").replace(", BaseSettings", "").replace("BaseSettings", "").strip()
+                                if new_line.endswith(","): new_line = new_line[:-1].strip()
+                                if new_line == "from pydantic import":
+                                    lines[i] = "from pydantic_settings import BaseSettings"
+                                else:
+                                    lines[i] = new_line + "\nfrom pydantic_settings import BaseSettings"
+                        content = '\n'.join(lines)
+                        content = content.replace("core.logging", "custom_logger")
+                        content = content.replace("app.core.logging", "custom_logger")
                         if "if settings" in content and "if settings:" not in content:
-                            content = content.replace("if settings\n", "if settings:\n")
-                            content = content.replace("if settings \n", "if settings:\n")
-                        # Fix flat directory import hallucination
+                            content = content.replace("if settings", "if settings:")
                         content = content.replace("from app.", "from ")
                         content = content.replace("import app.", "import ")
 
-                    if clean_path.endswith("package.json"):
-                        # Remove hallucinated/broken npm packages
-                        content = re.sub(r'"@types/tailwindcss":\s*"[^"]+",?', '', content)
-                        content = re.sub(r'"@types/react":\s*"[^"]+",?', '"@types/react": "*",', content)
-                        content = re.sub(r'"react-typescript-script":\s*"[^"]+",?', '', content)
-                        content = re.sub(r'"react-scripts-ts":\s*"[^"]+",?', '', content)
-                        # Fix AI hallucinated JavaScript comments inside JSON
-                        content = re.sub(r'^\s*//.*$', '', content, flags=re.MULTILINE)
-
                     if clean_path.endswith("requirements.txt"):
-                        # Remove hallucinated invalid pip commands
+                        content = re.sub(r"==[^\s]+", "", content)
                         content = re.sub(r'python\s+-m\s+app\.main\s*\n?', '', content)
                         content = re.sub(r'python\s+main\.py\s*\n?', '', content)
 
@@ -162,12 +169,12 @@ IF EXIST "frontend" (
     
     IF NOT EXIST "package.json" (
         echo [Frontend] WARNING: package.json missing! Creating fallback...
-        echo {"name":"app","version":"1.0.0","scripts":{"dev":"vite","start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1"},"devDependencies":{"vite":"^4.4.5"},"browserslist":{"production":[">0.2%%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}} > package.json
+        echo {"name":"app","version":"1.0.0","scripts":{"start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1","react-router-dom":"^6.22.0","lucide-react":"^0.344.0","axios":"^1.6.7","tailwindcss":"^3.4.1"},"browserslist":{"production":[">0.2%%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}} > package.json
     )
     
     call npm install --legacy-peer-deps
     echo [Frontend] Starting server...
-    start cmd /k "npm run dev || npm start"
+    start cmd /k "npm start"
     cd ..
 )
 
@@ -211,16 +218,12 @@ if [ -d "frontend" ]; then
     
     if [ ! -f "package.json" ]; then
         echo "[Frontend] WARNING: package.json missing! Creating fallback..."
-        echo '{"name":"app","version":"1.0.0","scripts":{"dev":"vite","start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1"},"devDependencies":{"vite":"^4.4.5"},"browserslist":{"production":[">0.2%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}}' > package.json
+        echo '{"name":"app","version":"1.0.0","scripts":{"start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1","react-router-dom":"^6.22.0","lucide-react":"^0.344.0","axios":"^1.6.7","tailwindcss":"^3.4.1"},"browserslist":{"production":[">0.2%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}}' > package.json
     fi
     
     npm install
     echo "[Frontend] Starting server..."
-    if grep -q '"dev"[ \t]*:' package.json; then
-        npm run dev &
-    else
-        npm start &
-    fi
+    npm start &
     cd ..
 fi
 
@@ -290,19 +293,35 @@ async def launch_project(project_id: str):
                 if not clean_path.startswith(f"{folder}/"):
                     clean_path = f"{folder}/{clean_path.lstrip('/')}"
                     
-                if "requirements.txt" in clean_path.lower():
-                    content = re.sub(r"==[^\s]+", "", content)
-                    content = re.sub(r'python\s+-m\s+app\.main\s*\n?', '', content)
-                    content = re.sub(r'python\s+main\.py\s*\n?', '', content)
+                if clean_path.startswith("frontend/") and not clean_path.startswith("frontend/public/"):
+                    filename = os.path.basename(clean_path)
+                    filename = re.sub(r'^main\.(tsx|ts|jsx|js)$', r'index.\1', filename)
+                    
+                    if filename == "package.json":
+                        continue
+                        
+                    clean_path = f"frontend/src/{filename}"
+                    
+                    if filename.endswith((".tsx", ".ts", ".css", ".js", ".jsx")):
+                        content = re.sub(r'(from\s+[\'"])(?:\.\/|\.\.\/)+.*\/([^\/]+)([\'"])', r'\1./\2\3', content)
+                        content = re.sub(r'(import\s+[\'"])(?:\.\/|\.\.\/)+.*\/([^\/]+)([\'"])', r'\1./\2\3', content)
+                        content = re.sub(r"^([ \t]*)(interface\s+[A-Z][a-zA-Z0-9_]*\s*\{)", r"\1export \2", content, flags=re.MULTILINE)
+                        content = content.replace("export export ", "export ")
 
                 if clean_path == "backend/logging.py":
-                    clean_path = "backend/custom_logger.py"
-                    
-                if clean_path.startswith("frontend/") and not clean_path.startswith("frontend/src/") and not clean_path.startswith("frontend/public/"):
-                    if clean_path.endswith((".tsx", ".ts", ".css", ".js", ".jsx")):
-                        clean_path = clean_path.replace("frontend/", "frontend/src/", 1)
+                        clean_path = "backend/custom_logger.py"
 
                 if clean_path.endswith(".py"):
+                    lines = content.split('\n')
+                    for i, line in enumerate(lines):
+                        if line.startswith("from pydantic import") and "BaseSettings" in line:
+                            new_line = line.replace("BaseSettings, ", "").replace(", BaseSettings", "").replace("BaseSettings", "").strip()
+                            if new_line.endswith(","): new_line = new_line[:-1].strip()
+                            if new_line == "from pydantic import":
+                                lines[i] = "from pydantic_settings import BaseSettings"
+                            else:
+                                lines[i] = new_line + "\nfrom pydantic_settings import BaseSettings"
+                    content = '\n'.join(lines)
                     content = content.replace("core.logging", "custom_logger")
                     content = content.replace("app.core.logging", "custom_logger")
                     if "if settings" in content and "if settings:" not in content:
@@ -310,15 +329,10 @@ async def launch_project(project_id: str):
                     content = content.replace("from app.", "from ")
                     content = content.replace("import app.", "import ")
 
-                if clean_path.endswith("package.json"):
-                    content = re.sub(r'"@types/tailwindcss":\s*"[^"]+",?', '', content)
-                    content = re.sub(r'"@types/react-router-dom":\s*"[^"]+",?', '', content)
-                    content = re.sub(r'"@types/react":\s*"[^"]+",?', '"@types/react": "*",', content)
-                    content = re.sub(r'"react-typescript-script":\s*"[^"]+",?', '', content)
-                    content = re.sub(r'"react-scripts-ts":\s*"[^"]+",?', '', content)
-                    content = re.sub(r'^\s*//.*$', '', content, flags=re.MULTILINE)
-                    if '"browserslist"' not in content and '"dependencies"' in content:
-                        content = content.replace('"dependencies"', '"browserslist": {"production": [">0.2%", "not dead", "not op_mini all"], "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]}, "dependencies"')
+                if clean_path.endswith("requirements.txt"):
+                    content = re.sub(r"==[^\s]+", "", content)
+                    content = re.sub(r'python\s+-m\s+app\.main\s*\n?', '', content)
+                    content = re.sub(r'python\s+main\.py\s*\n?', '', content)
 
                 full_path = os.path.join(workspace_dir, clean_path)
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
@@ -367,12 +381,12 @@ IF EXIST "frontend" (
     
     IF NOT EXIST "package.json" (
         echo [Frontend] WARNING: package.json missing! Creating fallback...
-        echo {"name":"app","version":"1.0.0","scripts":{"dev":"vite","start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1"},"devDependencies":{"vite":"^4.4.5"}} > package.json
+        echo {"name":"app","version":"1.0.0","scripts":{"start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1","react-router-dom":"^6.22.0","lucide-react":"^0.344.0","axios":"^1.6.7","tailwindcss":"^3.4.1"},"browserslist":{"production":[">0.2%%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}} > package.json
     )
     
     call npm install --legacy-peer-deps
     echo [Frontend] Starting server...
-    start cmd /k "npm run dev || npm start"
+    start cmd /k "npm start"
     cd ..
 )
 """

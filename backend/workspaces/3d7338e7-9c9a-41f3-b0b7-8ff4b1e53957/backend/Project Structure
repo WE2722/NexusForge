@@ -1,0 +1,29 @@
+currency_converter/
+├── app/
+│   ├── __init__.py
+│   ├── main.py          # FastAPI app setup
+│   ├── config.py        # Configuration settings
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── schemas.py   # Pydantic models
+│   │   └── enums.py     # Enums
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── currency.py  # Currency conversion logic
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── v1/
+│   │       ├── __init__.py
+│   │       └── endpoints.py  # API endpoints
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── security.py  # Security utilities
+│   │   └── logging.py   # Logging configuration
+│   └── dependencies.py  # Dependency injections
+├── tests/
+│   ├── __init__.py
+│   ├── test_conversion.py
+│   └── conftest.py
+├── requirements.txt
+├── .env.example
+└── README.md

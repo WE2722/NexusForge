@@ -36,11 +36,11 @@ IF EXIST "frontend" (
     
     IF NOT EXIST "package.json" (
         echo [Frontend] WARNING: package.json missing! Creating fallback...
-        echo {"name":"app","version":"1.0.0","scripts":{"dev":"vite","start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1"},"devDependencies":{"vite":"^4.4.5"}} > package.json
+        echo {"name":"app","version":"1.0.0","scripts":{"start":"react-scripts start"},"dependencies":{"react":"^18.2.0","react-dom":"^18.2.0","react-scripts":"^5.0.1","react-router-dom":"^6.22.0","lucide-react":"^0.344.0","axios":"^1.6.7","tailwindcss":"^3.4.1"},"browserslist":{"production":[">0.2%%","not dead","not op_mini all"],"development":["last 1 chrome version","last 1 firefox version","last 1 safari version"]}} > package.json
     )
     
     call npm install --legacy-peer-deps
     echo [Frontend] Starting server...
-    start cmd /k "npm run dev || npm start"
+    start cmd /k "npm start"
     cd ..
 )

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import TodoList from './components/TodoList';
+import TodoList from './TodoList';
 import CreateTaskForm from './components/CreateTaskForm';
 
-interface ITodo {
+export interface ITodo {
   id: number;
   title: string;
   completed: boolean;
 }
 
-interface ITodoListProps {
+export interface ITodoListProps {
   todos: ITodo[];
   onDelete: (id: number) => void;
   onToggle: (id: number) => void;

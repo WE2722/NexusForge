@@ -1,7 +1,7 @@
 import React from 'react';
 import { ITodo } from '../App';
 
-interface ITodoListProps {
+export interface ITodoListProps {
   todos: ITodo[];
   onDelete: (id: number) => void;
   onToggle: (id: number) => void;

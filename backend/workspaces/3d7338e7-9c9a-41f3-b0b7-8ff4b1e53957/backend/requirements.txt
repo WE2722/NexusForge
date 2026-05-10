@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-dotenv
+pydantic
+python-multipart
+httpx
+python-jose
+passlib
+python-logging-loki  # Optional: for Loki logging
