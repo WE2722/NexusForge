@@ -194,3 +194,94 @@ class HealthResponse(BaseModel):
     version: str = "1.0.0"
     uptime_seconds: float = 0.0
     services: dict[str, str] = Field(default_factory=dict)
+
+
+# ── Chat Models ───────────────────────────────────────────────────
+class ChatIntent(str, Enum):
+    ADD_FEATURE = "add_feature"
+    FIX_BUG = "fix_bug"
+    CHANGE_DESIGN = "change_design"
+    REFACTOR = "refactor"
+    CHANGE_STACK = "change_stack"
+    QUESTION = "question"
+
+
+class FileChange(BaseModel):
+    """A single file change produced by the chat orchestrator."""
+    file: str = ""
+    action: str = "modified"           # "created", "modified", "deleted"
+    diff: str = ""                     # human-readable diff summary
+
+
+class ChatMessage(BaseModel):
+    """A single message in a chat conversation."""
+    role: str = "user"                 # "user" | "assistant"
+    content: str = ""
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    intent: str = ""
+    changes: list[FileChange] = Field(default_factory=list)
+    agents_involved: list[str] = Field(default_factory=list)
+    status: str = "completed"          # "completed", "partial", "failed"
+
+
+class ChatRequest(BaseModel):
+    """Request body for POST /projects/{id}/chat."""
+    message: str = Field(..., min_length=1, max_length=5000)
+
+
+class ChatResponse(BaseModel):
+    """Response for a chat message."""
+    response: str = ""
+    intent: str = ""
+    changes: list[FileChange] = Field(default_factory=list)
+    agents_involved: list[str] = Field(default_factory=list)
+    status: str = "completed"
+    preview_url: str | None = None
+
+
+# ── Compile / Fix / Delivery Models ───────────────────────────────
+class CompileResult(BaseModel):
+    """Result of compiling a project."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    success: bool = False
+    backend_compiled: bool = False
+    frontend_compiled: bool = False
+    backend_errors: list[str] = Field(default_factory=list)
+    frontend_errors: list[str] = Field(default_factory=list)
+    backend_logs: str = ""
+    frontend_logs: str = ""
+    backend_url: str | None = None
+    frontend_url: str | None = None
+    temp_dir: str = ""
+    status: str = "pending"            # "pending", "running", "completed", "failed"
+
+
+class FixResult(BaseModel):
+    """Result of the auto-fix loop."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    success: bool = False
+    iterations_used: int = 0
+    errors_fixed: list[str] = Field(default_factory=list)
+    errors_remaining: list[str] = Field(default_factory=list)
+    manual_fixes_needed: list[dict[str, Any]] = Field(default_factory=list)
+    logs: str = ""
+    status: str = "pending"
+
+
+class DeliveryResult(BaseModel):
+    """Result of the delivery pipeline."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    download_url: str = ""
+    size_bytes: int = 0
+    zip_path: str = ""
+    readme_generated: bool = False
+    status: str = "pending"
+
+
+class PreviewResult(BaseModel):
+    """Result of preview (live servers)."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    backend_url: str | None = None
+    frontend_url: str | None = None
+    expires_in: str = "1 hour"
+    status: str = "running"

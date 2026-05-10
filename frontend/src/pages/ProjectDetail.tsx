@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Layers, PlayCircle, PauseCircle, Download, Rocket, Check, Clock, AlertCircle, Loader2, Code, FileText } from 'lucide-react'
+import { Layers, PauseCircle, Download, Rocket, Check, Clock, AlertCircle, Loader2, Code, FileText, Wrench, Eye, Package } from 'lucide-react'
 import { useProjects } from '../hooks/useProject'
+import ChatPanel from '../components/ChatPanel'
+import CompilePanel from '../components/CompilePanel'
+import FixLoopPanel from '../components/FixLoopPanel'
 import axios from 'axios'
 
 /* ── Timeline Component ── */
@@ -98,11 +101,151 @@ function CodeViewer({ files }: { files: Record<string, string> }) {
   )
 }
 
+/* ── Preview Panel ── */
+function PreviewPanel({ projectId }: { projectId: string }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleStartPreview = async () => {
+    setLoading(true)
+    try {
+      const { data } = await axios.post(`/api/projects/${projectId}/preview`)
+      if (data.frontend_url) {
+        setPreviewUrl(data.frontend_url)
+      } else if (data.backend_url) {
+        setPreviewUrl(data.backend_url)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (!previewUrl) {
+    return (
+      <div className="text-center py-10">
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-white/[0.06] flex items-center justify-center mx-auto mb-4">
+          <Eye size={36} className="text-cyan-400/60" />
+        </div>
+        <h3 className="text-lg font-semibold mb-2">Live Preview</h3>
+        <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+          Start a live preview to see your app running. Preview servers auto-stop after 1 hour.
+        </p>
+        <button onClick={handleStartPreview} disabled={loading} className="btn-primary text-base px-8 py-3">
+          {loading ? <Loader2 size={18} className="animate-spin" /> : <Eye size={18} />}
+          {loading ? 'Starting...' : 'Start Preview'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-sm text-green-400 font-medium">Preview Running</span>
+        </div>
+        <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary text-xs py-1.5 px-3">
+          Open in New Tab
+        </a>
+      </div>
+      <div className="rounded-xl overflow-hidden border border-white/[0.06] h-[500px]">
+        <iframe src={previewUrl} className="w-full h-full bg-white" title="Project Preview" />
+      </div>
+    </div>
+  )
+}
+
+/* ── Download Panel ── */
+function DownloadPanel({ projectId, projectTitle }: { projectId: string; projectTitle: string }) {
+  const [delivering, setDelivering] = useState(false)
+  const [delivered, setDelivered] = useState(false)
+
+  const handleDeliver = async () => {
+    setDelivering(true)
+    try {
+      await axios.post(`/api/projects/${projectId}/deliver`)
+      setDelivered(true)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDelivering(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    try {
+      const resp = await axios.get(`/api/projects/${projectId}/download`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([resp.data]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${projectTitle.replace(/\s/g, '_') || 'project'}.zip`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+      // Fallback to export endpoint
+      try {
+        const resp = await axios.get(`/api/projects/${projectId}/export`, { responseType: 'blob' })
+        const url = window.URL.createObjectURL(new Blob([resp.data]))
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${projectTitle.replace(/\s/g, '_') || 'project'}.zip`
+        a.click()
+        window.URL.revokeObjectURL(url)
+      } catch (e2) {
+        console.error(e2)
+      }
+    }
+  }
+
+  return (
+    <div className="text-center py-10">
+      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-white/[0.06] flex items-center justify-center mx-auto mb-4">
+        <Download size={36} className="text-green-400/60" />
+      </div>
+      <h3 className="text-lg font-semibold mb-2">Download Project</h3>
+      <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+        Package your project with README, .env.example, and all source code in a ZIP file.
+      </p>
+      <div className="flex gap-3 justify-center">
+        {!delivered ? (
+          <button onClick={handleDeliver} disabled={delivering} className="btn-primary text-base px-8 py-3">
+            {delivering ? <Loader2 size={18} className="animate-spin" /> : <Package size={18} />}
+            {delivering ? 'Packaging...' : 'Package & Deliver'}
+          </button>
+        ) : (
+          <button onClick={handleDownload} className="btn-primary text-base px-8 py-3">
+            <Download size={18} /> Download ZIP
+          </button>
+        )}
+        <button onClick={handleDownload} className="btn-secondary text-base px-6 py-3">
+          <Download size={18} /> Quick Export
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ── Tab Definition ── */
+type TabId = 'overview' | 'code' | 'compile' | 'fix' | 'preview' | 'download'
+
+const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  { id: 'overview', label: 'Overview', icon: <Layers size={14} /> },
+  { id: 'code', label: 'Code', icon: <Code size={14} /> },
+  { id: 'compile', label: 'Compile', icon: <Rocket size={14} /> },
+  { id: 'fix', label: 'Fix', icon: <Wrench size={14} /> },
+  { id: 'preview', label: 'Preview', icon: <Eye size={14} /> },
+  { id: 'download', label: 'Download', icon: <Download size={14} /> },
+]
+
 /* ── Main Component ── */
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
   const { fetchProjectDetail, activeProject } = useProjects()
-  const [activeTab, setActiveTab] = useState<'overview' | 'code'>('overview')
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [launching, setLaunching] = useState(false)
 
   useEffect(() => {
@@ -215,24 +358,25 @@ export default function ProjectDetail() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl w-fit">
-        {(['overview', 'code'] as const).map(tab => (
+      <div className="flex gap-1 p-1 bg-white/[0.02] rounded-xl w-fit overflow-x-auto">
+        {TABS.map(tab => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-              activeTab === tab
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+              activeTab === tab.id
                 ? 'bg-white/[0.06] text-white'
                 : 'text-muted-foreground hover:text-white'
             }`}
           >
-            {tab === 'overview' ? 'Overview & Timeline' : 'Generated Code'}
+            {tab.icon}
+            {tab.label}
           </button>
         ))}
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'overview' ? (
+      {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 glass-card-static p-6">
             <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
@@ -281,9 +425,36 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
-      ) : (
-        <CodeViewer files={allFiles} />
       )}
+
+      {activeTab === 'code' && <CodeViewer files={allFiles} />}
+
+      {activeTab === 'compile' && id && (
+        <CompilePanel
+          projectId={id}
+          onAutoFix={() => setActiveTab('fix')}
+          onChatFix={() => {}}
+        />
+      )}
+
+      {activeTab === 'fix' && id && (
+        <FixLoopPanel
+          projectId={id}
+          onOpenChat={() => {}}
+        />
+      )}
+
+      {activeTab === 'preview' && id && <PreviewPanel projectId={id} />}
+
+      {activeTab === 'download' && id && (
+        <DownloadPanel
+          projectId={id}
+          projectTitle={activeProject.brief?.title || 'project'}
+        />
+      )}
+
+      {/* Chat Panel Overlay */}
+      {id && <ChatPanel projectId={id} />}
     </div>
   )
 }

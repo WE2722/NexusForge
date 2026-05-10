@@ -65,3 +65,76 @@ export interface AgentInfo {
   expertise: string[]
   preferred_providers: string[]
 }
+
+// ── Chat Types ──────────────────────────────────────────────────
+export type ChatIntentType = 'add_feature' | 'fix_bug' | 'change_design' | 'refactor' | 'change_stack' | 'question'
+
+export interface FileChange {
+  file: string
+  action: 'created' | 'modified' | 'deleted'
+  diff: string
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+  intent?: string
+  changes?: FileChange[]
+  agents_involved?: string[]
+  status?: 'completed' | 'partial' | 'failed'
+}
+
+export interface ChatResponse {
+  response: string
+  intent: string
+  changes: FileChange[]
+  agents_involved: string[]
+  status: 'completed' | 'partial' | 'failed'
+  preview_url: string | null
+}
+
+// ── Compile / Fix / Delivery Types ──────────────────────────────
+export interface CompileResult {
+  id: string
+  success: boolean
+  backend_compiled: boolean
+  frontend_compiled: boolean
+  backend_errors: string[]
+  frontend_errors: string[]
+  backend_logs: string
+  frontend_logs: string
+  backend_url: string | null
+  frontend_url: string | null
+  temp_dir: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+}
+
+export interface FixResult {
+  id: string
+  success: boolean
+  iterations_used: number
+  errors_fixed: string[]
+  errors_remaining: string[]
+  manual_fixes_needed: { file: string; error: string; suggestion: string }[]
+  logs: string
+  status: 'pending' | 'running' | 'completed' | 'partial' | 'failed'
+}
+
+export interface DeliveryResult {
+  id: string
+  download_url: string
+  size_bytes: number
+  zip_path: string
+  readme_generated: boolean
+  status: 'pending' | 'running' | 'completed' | 'failed'
+}
+
+export interface PreviewResult {
+  id: string
+  backend_url: string | null
+  frontend_url: string | null
+  expires_in: string
+  status: 'running' | 'stopped' | 'failed'
+}
+

@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
+from app.api.chat import chat_router
 from app.services.project_memory import ProjectMemory
 
 logger = structlog.get_logger(__name__)
@@ -44,6 +45,7 @@ app.add_middleware(
 
 # Routes
 app.include_router(router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
 
 @app.get("/")
 async def root():

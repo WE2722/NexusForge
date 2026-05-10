@@ -113,6 +113,44 @@ class Orchestrator:
     def get_agents(self) -> list[dict]:
         return [agent.get_info() for agent in self._agents.values()]
 
+    @property
+    def agents(self) -> dict:
+        """Expose agents dict for ChatOrchestrator and FixLoop access."""
+        return self._agents
+
+    def get_project_files(self, project_id: str) -> dict[str, str]:
+        """Collect all code blocks from a project's completed tasks."""
+        project = self._projects.get(project_id)
+        if not project:
+            return {}
+        files: dict[str, str] = {}
+        for task in project.tasks:
+            if task.result and task.result.code_blocks:
+                files.update(task.result.code_blocks)
+        return files
+
+    def update_project_files(self, project_id: str, file_updates: dict[str, str]) -> bool:
+        """Merge new/updated code blocks into a project's tasks."""
+        project = self._projects.get(project_id)
+        if not project:
+            return False
+        for filename, new_code in file_updates.items():
+            applied = False
+            for task in project.tasks:
+                if task.result and task.result.code_blocks and filename in task.result.code_blocks:
+                    task.result.code_blocks[filename] = new_code
+                    applied = True
+                    break
+            if not applied:
+                # Attach to first task with code_blocks
+                for task in project.tasks:
+                    if task.result and task.result.code_blocks is not None:
+                        task.result.code_blocks[filename] = new_code
+                        break
+        project.updated_at = datetime.now(timezone.utc)
+        self._save_projects()
+        return True
+
     def pause_project(self, project_id: str) -> bool:
         if project_id in self._projects:
             self._paused.add(project_id)
