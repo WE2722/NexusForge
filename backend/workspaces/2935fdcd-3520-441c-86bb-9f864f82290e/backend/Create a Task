@@ -1,0 +1,18 @@
+- **Request Body**:
+  ```json
+  {
+    "title": "Buy groceries",
+    "description": "Milk, eggs, bread"
+  }
+  ```
+- **Response** (201 Created):
+  ```json
+  {
+    "id": 1,
+    "title": "Buy groceries",
+    "description": "Milk, eggs, bread",
+    "status": "pending"
+  }
+  ```
+
+#### Get All Tasks

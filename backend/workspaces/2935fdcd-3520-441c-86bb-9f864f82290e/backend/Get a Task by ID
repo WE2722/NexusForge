@@ -1,0 +1,19 @@
+- **Parameters**:
+  - `task_id` (path parameter): ID of the task
+- **Response** (200 OK):
+  ```json
+  {
+    "id": 1,
+    "title": "Buy groceries",
+    "description": "Milk, eggs, bread",
+    "status": "pending"
+  }
+  ```
+- **Error Response** (404 Not Found):
+  ```json
+  {
+    "detail": "Task not found"
+  }
+  ```
+
+#### Update a Task

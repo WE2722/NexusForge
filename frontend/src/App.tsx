@@ -4,6 +4,8 @@ import Dashboard from './pages/Dashboard';
 import ProjectCreator from './pages/ProjectCreator';
 import ProjectDetail from './pages/ProjectDetail';
 import AgentMonitor from './pages/AgentMonitor';
+import Settings from './pages/Settings';
+import ApiKeys from './pages/ApiKeys';
 
 function App() {
   return (
@@ -13,6 +15,8 @@ function App() {
         <Route path="create" element={<ProjectCreator />} />
         <Route path="project/:id" element={<ProjectDetail />} />
         <Route path="agents" element={<AgentMonitor />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="keys" element={<ApiKeys />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

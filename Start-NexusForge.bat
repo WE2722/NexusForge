@@ -1,28 +1,35 @@
 @echo off
 title NexusForge Launcher
-echo ===================================================
-echo             N E X U S F O R G E
-echo ===================================================
+color 0A
 echo.
-echo Starting the NexusForge Application...
+echo  ╔═══════════════════════════════════════════════╗
+echo  ║          N E X U S F O R G E                  ║
+echo  ║       AI Development Platform                 ║
+echo  ╚═══════════════════════════════════════════════╝
+echo.
 
-:: Start Backend in a new window
-echo [1/2] Launching FastAPI Backend on Port 8000...
+:: Start Backend
+echo [1/2] Starting FastAPI Backend on port 8000...
 cd backend
-start "NexusForge Backend" cmd /k ".venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --port 8000"
+start "NexusForge Backend" cmd /k "python -m uvicorn app.main:app --reload --port 8000"
 cd ..
 
-:: Start Frontend in a new window
-echo [2/2] Launching React Frontend on Port 5173...
+:: Wait for backend to be ready
+echo      Waiting for backend to start...
+timeout /t 3 /noq >nul
+
+:: Start Frontend
+echo [2/2] Starting React Frontend on port 5173...
 cd frontend
 start "NexusForge Frontend" cmd /k "npm run dev"
 cd ..
 
 echo.
-echo NexusForge components are booting up in separate windows!
+echo ✓ NexusForge is starting up!
 echo.
-echo You can access the UI at: http://localhost:5173
-echo You can access the API at: http://127.0.0.1:8000
+echo   Frontend:  http://localhost:5173
+echo   Backend:   http://127.0.0.1:8000
+echo   API Docs:  http://127.0.0.1:8000/docs
 echo.
-echo Press any key to close this launcher (the servers will remain running in their windows).
+echo Press any key to close this launcher (servers keep running).
 pause >nul

@@ -24,13 +24,50 @@ export function useProjects() {
   }
 
   const fetchProjectDetail = async (id: string) => {
-    const { data } = await axios.get(`/api/projects/${id}`)
-    setActiveProject(data)
+    try {
+      const { data } = await axios.get(`/api/projects/${id}`)
+      setActiveProject(data)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const launchProject = async (id: string) => {
+    const { data } = await axios.post(`/api/projects/${id}/launch`)
+    return data
+  }
+
+  const exportProject = async (id: string) => {
+    const resp = await axios.get(`/api/projects/${id}/export`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([resp.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `project_${id}.zip`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const pauseProject = async (id: string) => {
+    await axios.post(`/api/projects/${id}/pause`)
+  }
+
+  const resumeProject = async (id: string) => {
+    await axios.post(`/api/projects/${id}/resume`)
   }
 
   useEffect(() => {
     fetchProjects()
   }, [])
 
-  return { projects, loading, createProject, fetchProjectDetail, activeProject }
+  return {
+    projects,
+    loading,
+    createProject,
+    fetchProjectDetail,
+    activeProject,
+    launchProject,
+    exportProject,
+    pauseProject,
+    resumeProject,
+  }
 }

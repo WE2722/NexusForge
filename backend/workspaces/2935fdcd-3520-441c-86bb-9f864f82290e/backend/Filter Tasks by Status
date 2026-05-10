@@ -1,0 +1,17 @@
+- **Parameters**:
+  - `status` (path parameter): Task status to filter by (`pending` or `completed`)
+- **Response** (200 OK):
+  ```json
+  [
+    {
+      "id": 1,
+      "title": "Buy groceries",
+      "description": "Milk, eggs, bread",
+      "status": "pending"
+    }
+  ]
+  ```
+
+### Health Endpoint
+
+#### Health Check

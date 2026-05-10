@@ -1,0 +1,11 @@
+- **Parameters**:
+  - `task_id` (path parameter): ID of the task
+- **Response** (204 No Content): Empty response
+- **Error Response** (404 Not Found):
+  ```json
+  {
+    "detail": "Task not found"
+  }
+  ```
+
+#### Filter Tasks by Status

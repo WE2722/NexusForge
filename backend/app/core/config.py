@@ -17,10 +17,17 @@ class Settings(BaseSettings):
     )
 
     # ── LLM Provider API Keys ──────────────────────────────────────
+    # Single-key (backward compatible)
     google_api_key: str = ""
     groq_api_key: str = ""
     mistral_api_key: str = ""
     openrouter_api_key: str = ""
+
+    # Multi-key (comma-separated in .env, e.g. GOOGLE_API_KEYS=key1,key2,key3)
+    google_api_keys: str = ""
+    groq_api_keys: str = ""
+    mistral_api_keys: str = ""
+    openrouter_api_keys: str = ""
 
     # ── Database ───────────────────────────────────────────────────
     mongodb_uri: str = "mongodb://localhost:27017"
@@ -44,19 +51,44 @@ class Settings(BaseSettings):
     # ── Derived helpers ────────────────────────────────────────────
     @property
     def has_google(self) -> bool:
-        return bool(self.google_api_key)
+        return bool(self.google_api_key) or bool(self.google_api_keys)
 
     @property
     def has_groq(self) -> bool:
-        return bool(self.groq_api_key)
+        return bool(self.groq_api_key) or bool(self.groq_api_keys)
 
     @property
     def has_mistral(self) -> bool:
-        return bool(self.mistral_api_key)
+        return bool(self.mistral_api_key) or bool(self.mistral_api_keys)
 
     @property
     def has_openrouter(self) -> bool:
-        return bool(self.openrouter_api_key)
+        return bool(self.openrouter_api_key) or bool(self.openrouter_api_keys)
+
+    def get_keys(self, provider: str) -> list[str]:
+        """Return all available keys for a provider as a list."""
+        single_map = {
+            "google": self.google_api_key,
+            "groq": self.groq_api_key,
+            "mistral": self.mistral_api_key,
+            "openrouter": self.openrouter_api_key,
+        }
+        multi_map = {
+            "google": self.google_api_keys,
+            "groq": self.groq_api_keys,
+            "mistral": self.mistral_api_keys,
+            "openrouter": self.openrouter_api_keys,
+        }
+        keys: list[str] = []
+        # Multi-key takes priority
+        multi = multi_map.get(provider, "")
+        if multi:
+            keys.extend(k.strip() for k in multi.split(",") if k.strip())
+        # Fall back to single key
+        single = single_map.get(provider, "")
+        if single and single not in keys:
+            keys.append(single)
+        return keys
 
 
 settings = Settings()
