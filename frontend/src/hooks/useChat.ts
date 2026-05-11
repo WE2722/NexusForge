@@ -55,8 +55,7 @@ export function useChat(projectId: string): UseChatReturn {
 
   const connectWebSocket = () => {
     try {
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws/projects/${projectId}/chat`
+      const wsUrl = `ws://${window.location.hostname}:8000/api/ws/projects/${projectId}/chat`
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
